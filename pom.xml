@@ -183,13 +183,6 @@
 
     <profiles>
         <profile>
-            <id>scala-2.10</id>
-            <properties>
-                <scala.binary.version>2.10</scala.binary.version>
-                <scala.version>${scala_2.10.version}</scala.version>
-            </properties>
-        </profile>
-        <profile>
             <id>scala-2.11</id>
             <properties>
                 <scala.binary.version>2.11</scala.binary.version>
