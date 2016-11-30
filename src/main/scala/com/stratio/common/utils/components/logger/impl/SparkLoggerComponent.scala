@@ -16,7 +16,8 @@
 package com.stratio.common.utils.components.logger.impl
 
 import com.stratio.common.utils.components.logger.LoggerComponent
-import org.apache.spark.Logging
+import com.stratio.common.utils.logging.Logging
+
 
 trait SparkLoggerComponent extends LoggerComponent with Logging {
 
