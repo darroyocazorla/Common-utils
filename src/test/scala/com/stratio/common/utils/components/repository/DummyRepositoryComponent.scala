@@ -16,6 +16,7 @@
 package com.stratio.common.utils.components.repository
 
 import scala.collection.mutable
+import scala.util.{Failure, Success, Try}
 
 trait DummyRepositoryComponent extends RepositoryComponent[String, String] {
 
@@ -32,55 +33,59 @@ trait DummyRepositoryComponent extends RepositoryComponent[String, String] {
 
   class DummyRepository() extends Repository {
 
-    def get(entity:String, id: String): Option[String] =
-      memoryMap.get(entity).flatMap(_.get(id))
+    def get(entity: String, id: String): Try[Option[String]] =
+      Try(memoryMap.get(entity).flatMap(_.get(id)))
 
-    def getAll(entity:String): List[String] =
-      memoryMap.get(entity) match {
-        case Some(map: mutable.Map[String,String]) => {
-          map.values.toList.sortBy(x => x)
-        }
-        case _ => List.empty[String]
-      }
+    def getAll(entity: String): Try[List[String]] =
+      Try(memoryMap.get(entity) match {
+        case Some(map: mutable.Map[String, String]) => map.values.toList.sortBy(identity)
+        case _ => List.empty
+      })
 
-    def getNodes(entity:String): List[String] =
-      memoryMap.get(entity) match {
-        case Some(map: mutable.Map[String,String]) => {
-          map.keys.toList.sortBy(x => x)
-        }
-        case _ => List.empty[String]
-      }
+    def getNodes(entity: String): Try[List[String]] =
+      Try(memoryMap.get(entity) match {
+        case Some(map: mutable.Map[String, String]) => map.keys.toList.sortBy(identity)
+        case _ => List.empty
+      })
 
-    def count(entity: String): Long =
-      memoryMap.get(entity) match {
+    def count(entity: String): Try[Long] =
+      Try(memoryMap.get(entity) match {
         case Some(value) => value.size
         case None => 0
-      }
+      })
 
-    def exists(entity:String, id: String): Boolean =
-      memoryMap.get(entity) match {
+    def exists(entity:String, id: String): Try[Boolean] =
+      Try(memoryMap.get(entity) match {
         case Some(value) => value.get(id).isDefined
         case None => false
-      }
+      })
 
-    def create(entity:String, id: String, element: String): String = {
-      if (!exists(entity, id)) {
-        memoryMap.put(entity, mutable.Map(id -> element))
+    def create(entity:String, id: String, element: String): Try[String] = {
+      exists(entity, id).foreach {
+        case false => memoryMap.put(entity, mutable.Map(id -> element))
+        case true => ()
       }
-      element
+      Success(element)
     }
 
-    override def upsert(entity: String, id: String, element: String): String = {
+    override def upsert(entity: String, id: String, element: String): Try[String] = {
       memoryMap.put(entity, mutable.Map(id -> element))
-      element
+      Success(element)
     }
 
-    def update(entity:String, id: String, element: String): Unit =
-      if (exists(entity, id)) memoryMap.put(entity, mutable.Map(id -> element))
+    def update(entity: String, id: String, element: String): Try[Unit] =
+      exists(entity, id).map {
+        case false => ()
+        case true => memoryMap.put(entity, mutable.Map(id -> element))
+      }
 
-    def delete(entity:String, id: String): Unit =
-      if (exists(entity, id)) memoryMap.get(entity).get.remove(id)
+    def delete(entity:String, id: String): Try[Unit] = {
+      exists(entity, id).map{
+        case false => ()
+        case true => memoryMap(entity).remove(id)
+      }
+    }
 
-    def deleteAll(entity:String): Unit = memoryMap.remove(entity)
+    def deleteAll(entity:String): Try[Unit] = Try(memoryMap.remove(entity))
   }
 }

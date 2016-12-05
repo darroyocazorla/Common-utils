@@ -31,6 +31,7 @@ import org.json4s.jackson.Serialization.read
 import scala.collection.JavaConversions._
 import scala.util.{Failure, Success, Try}
 import com.stratio.common.utils.components.repository.impl.ZookeeperRepositoryComponent._
+import org.apache.zookeeper.KeeperException.NoNodeException
 
 trait ZookeeperRepositoryComponent extends RepositoryComponent[String, Array[Byte]] {
   self: ConfigComponent with LoggerComponent =>
@@ -42,67 +43,68 @@ trait ZookeeperRepositoryComponent extends RepositoryComponent[String, Array[Byt
     private def curatorClient: CuratorFramework =
       ZookeeperRepository.getInstance(getZookeeperConfig)
 
-    def get(entity: String, id: String): Option[Array[Byte]] =
+
+    def get(entity: String, id: String): Try[Option[Array[Byte]]] =
       Try(Option(curatorClient
         .getData
-        .forPath(s"/$entity/$id"))).getOrElse(None)
+        .forPath(s"/$entity/$id")))
 
-    def getAll(entity: String): List[Array[Byte]] =
+    def getAll(entity: String): Try[List[Array[Byte]]] =
       Try(curatorClient
         .getChildren
-        .forPath(s"/$entity").map(get(entity, _).get).toList).getOrElse(List.empty[Array[Byte]])
+        .forPath(s"/$entity")).flatMap(entitiesIds =>
+        Try(entitiesIds.map(get(entity, _)).collect { case Success(Some(byteArray)) => byteArray }.toList
+        )
+      )
 
-    def getNodes(entity: String): List[String] =
+
+    def getNodes(entity: String): Try[List[String]] =
       Try(curatorClient
         .getChildren
-        .forPath(s"/$entity").toList).getOrElse(List.empty[String])
+        .forPath(s"/$entity").toList)
 
-    def count(entity: String): Long =
+    def count(entity: String): Try[Long] =
       Try(curatorClient
         .getChildren
-        .forPath(s"/$entity").size.toLong).getOrElse(0L)
+        .forPath(s"/$entity").size.toLong).recover { case _: NoNodeException => 0 }
 
-    def exists(entity: String, id: String): Boolean =
+    def exists(entity: String, id: String): Try[Boolean] =
       Try(Option(curatorClient
         .checkExists()
         .forPath(s"/$entity/$id"))
-      ).getOrElse(None).isDefined
+      ).map(_.isDefined)
 
-    def create(entity: String, id: String, element: Array[Byte]): Array[Byte] = {
+    def create(entity: String, id: String, element: Array[Byte]): Try[Array[Byte]] =
       Try(curatorClient
         .create()
         .creatingParentsIfNeeded()
-        .forPath(s"/$entity/$id", element))
-
-      get(entity, id)
-        .getOrElse(throw new NoSuchElementException(s"Something were wrong when retrieving element $id after create"))
-    }
-
-    def upsert(entity: String, id: String, element: Array[Byte]): Array[Byte] =
-      if (!exists(entity, id)) create(entity, id, element)
-      else {
-        update(entity, id, element)
-        get(entity, id)
-          .getOrElse(throw new NoSuchElementException(s"Something were wrong when retrieving element $id after create"))
+        .forPath(s"/$entity/$id", element)).flatMap[Array[Byte]] { _ =>
+        get(entity, id).map { case Some(byteArray) => byteArray }
       }
 
-    def update(entity: String, id: String, element: Array[Byte]): Unit =
+    def upsert(entity: String, id: String, element: Array[Byte]): Try[Array[Byte]] =
+      exists(entity, id).flatMap {
+        case false => create(entity, id, element)
+        case true => update(entity, id, element).flatMap(_ => get(entity, id).map { case Some(byteArray) => byteArray })
+      }
+
+    def update(entity: String, id: String, element: Array[Byte]): Try[Unit] =
       Try(curatorClient
         .setData()
         .forPath(s"/$entity/$id", element)
-      ).getOrElse(throw new ZookeeperRepositoryException(s"Something were wrong when updating element $id"))
+      )
 
-    def delete(entity: String, id: String): Unit =
+    def delete(entity: String, id: String): Try[Unit] =
       Try(curatorClient
         .delete()
         .forPath(s"/$entity/$id")
-      ).getOrElse(throw new ZookeeperRepositoryException(s"Something were wrong when deleting element $id"))
+      )
 
-    def deleteAll(entity: String): Unit =
+    def deleteAll(entity: String): Try[Unit] =
       Try(curatorClient
         .delete().deletingChildrenIfNeeded()
         .forPath(s"/$entity")
-      ).getOrElse(throw new ZookeeperRepositoryException(s"Something were wrong when deleting all"))
+      )
 
     def getZookeeperConfig: Config = {
       config.getConfig(path.getOrElse(ConfigZookeeper))
