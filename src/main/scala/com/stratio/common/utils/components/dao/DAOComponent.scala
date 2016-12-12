@@ -29,7 +29,7 @@ trait DAOComponent[K, V, M] {
     def get(id: K) (implicit manifest: Manifest[M]): Try[Option[M]] =
       repository.get(entity, id).map(_.map(entity => fromVtoM(entity)))
 
-    def getAll() (implicit manifest: Manifest[M]): Try[List[M]] =
+    def getAll() (implicit manifest: Manifest[M]): Try[Seq[M]] =
       repository.getAll(entity).map(_.map(fromVtoM))
 
     def count(): Try[Long] =

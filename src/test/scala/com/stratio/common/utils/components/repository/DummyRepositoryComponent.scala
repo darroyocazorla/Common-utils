@@ -36,28 +36,18 @@ trait DummyRepositoryComponent extends RepositoryComponent[String, String] {
     def get(entity: String, id: String): Try[Option[String]] =
       Try(memoryMap.get(entity).flatMap(_.get(id)))
 
-    def getAll(entity: String): Try[List[String]] =
-      Try(memoryMap.get(entity) match {
-        case Some(map: mutable.Map[String, String]) => map.values.toList.sortBy(identity)
-        case _ => List.empty
-      })
+    def getAll(entity: String): Try[Seq[String]] =
+      Try(memoryMap.get(entity).map(_.values.toList.sortBy(identity)).getOrElse(Seq.empty))
 
-    def getNodes(entity: String): Try[List[String]] =
-      Try(memoryMap.get(entity) match {
-        case Some(map: mutable.Map[String, String]) => map.keys.toList.sortBy(identity)
-        case _ => List.empty
-      })
+    def getNodes(entity: String): Try[Seq[String]] =
+      Try(memoryMap.get(entity).map(_.keys.toList.sortBy(identity)).getOrElse(Seq.empty))
 
     def count(entity: String): Try[Long] =
-      Try(memoryMap.get(entity) match {
-        case Some(value) => value.size
-        case None => 0
-      })
+      Try(memoryMap.get(entity).map(_.size).getOrElse(0).toLong)
 
-    def exists(entity:String, id: String): Try[Boolean] =
-      Try(memoryMap.get(entity) match {
-        case Some(value) => value.get(id).isDefined
-        case None => false
+    def exists(entity: String, id: String): Try[Boolean] =
+      Try(memoryMap.exists { case (key, entityMap) =>
+        key == entity && entityMap.keys.toList.contains(id)
       })
 
     def create(entity:String, id: String, element: String): Try[String] = {

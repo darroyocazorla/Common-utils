@@ -15,7 +15,6 @@
  */
 package com.stratio.common.utils.components.repository.impl
 
-import java.util.NoSuchElementException
 import java.util.concurrent.ConcurrentHashMap
 
 import com.stratio.common.utils.components.config.ConfigComponent
@@ -31,7 +30,8 @@ import org.json4s.jackson.Serialization.read
 import scala.collection.JavaConversions._
 import scala.util.{Failure, Success, Try}
 import com.stratio.common.utils.components.repository.impl.ZookeeperRepositoryComponent._
-import org.apache.zookeeper.KeeperException.NoNodeException
+import com.stratio.common.utils.functional.TryUtils
+
 
 trait ZookeeperRepositoryComponent extends RepositoryComponent[String, Array[Byte]] {
   self: ConfigComponent with LoggerComponent =>
@@ -43,30 +43,30 @@ trait ZookeeperRepositoryComponent extends RepositoryComponent[String, Array[Byt
     private def curatorClient: CuratorFramework =
       ZookeeperRepository.getInstance(getZookeeperConfig)
 
-
     def get(entity: String, id: String): Try[Option[Array[Byte]]] =
       Try(Option(curatorClient
         .getData
         .forPath(s"/$entity/$id")))
 
-    def getAll(entity: String): Try[List[Array[Byte]]] =
+    def getAll(entity: String): Try[Seq[Array[Byte]]] = {
+
       Try(curatorClient
         .getChildren
-        .forPath(s"/$entity")).flatMap(entitiesIds =>
-        Try(entitiesIds.map(get(entity, _)).collect { case Success(Some(byteArray)) => byteArray }.toList
-        )
+        .forPath(s"/$entity")).flatMap(entityIds =>
+        TryUtils.sequence(entityIds.map(get(entity, _).map(_.get)))
       )
+    }
 
 
-    def getNodes(entity: String): Try[List[String]] =
+    def getNodes(entity: String): Try[Seq[String]] =
       Try(curatorClient
         .getChildren
-        .forPath(s"/$entity").toList)
+        .forPath(s"/$entity"))
 
     def count(entity: String): Try[Long] =
       Try(curatorClient
         .getChildren
-        .forPath(s"/$entity").size.toLong).recover { case _: NoNodeException => 0 }
+        .forPath(s"/$entity").size.toLong)
 
     def exists(entity: String, id: String): Try[Boolean] =
       Try(Option(curatorClient
@@ -75,17 +75,18 @@ trait ZookeeperRepositoryComponent extends RepositoryComponent[String, Array[Byt
       ).map(_.isDefined)
 
     def create(entity: String, id: String, element: Array[Byte]): Try[Array[Byte]] =
-      Try(curatorClient
-        .create()
-        .creatingParentsIfNeeded()
-        .forPath(s"/$entity/$id", element)).flatMap[Array[Byte]] { _ =>
-        get(entity, id).map { case Some(byteArray) => byteArray }
-      }
+      Try(
+        curatorClient
+          .create()
+          .creatingParentsIfNeeded()
+          .forPath(s"/$entity/$id", element)
+      ).flatMap( _ => get(entity, id).map(_.get))
+
 
     def upsert(entity: String, id: String, element: Array[Byte]): Try[Array[Byte]] =
       exists(entity, id).flatMap {
         case false => create(entity, id, element)
-        case true => update(entity, id, element).flatMap(_ => get(entity, id).map { case Some(byteArray) => byteArray })
+        case true => update(entity, id, element).flatMap(_ => get(entity, id).map(_.get))
       }
 
     def update(entity: String, id: String, element: Array[Byte]): Try[Unit] =

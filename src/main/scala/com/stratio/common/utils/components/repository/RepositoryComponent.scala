@@ -25,9 +25,9 @@ trait RepositoryComponent[K, V] {
 
     def get(entity: String, id: K): Try[Option[V]]
 
-    def getAll(entity: String): Try[List[V]]
+    def getAll(entity: String): Try[Seq[V]]
 
-    def getNodes(entity: String): Try[List[K]]
+    def getNodes(entity: String): Try[Seq[K]]
 
     def count(entity: String): Try[Long]
 
