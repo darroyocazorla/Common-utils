@@ -24,7 +24,7 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpec}
 
-import scala.util.Success
+import scala.util.{Failure, Success}
 
 @RunWith(classOf[JUnitRunner])
 class ZookeeperIntegrationTest extends WordSpec
@@ -82,7 +82,7 @@ class ZookeeperIntegrationTest extends WordSpec
       dao.get("test1") should be(Success(Some(Dummy("value"))))
       dao.deleteAll
       dao.exists("test1") should be (Success(false))
-      dao.count() should be(Success(0))
+      dao.count() shouldBe a[Failure[_]]
     }
   }
 }
